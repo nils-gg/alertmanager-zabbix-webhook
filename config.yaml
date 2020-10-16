@@ -1,5 +1,8 @@
 # Webhook listening port
 port: 8080
+# Certificate (with intermediates) and keypair files
+#certFile: cert-with-chain.pem
+#keyFile: key.pem
 # Number of alerts the webhook queue can contains while waiting for processing
 queueCapacity: 500
 

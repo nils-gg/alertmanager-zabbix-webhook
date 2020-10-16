@@ -23,6 +23,8 @@ type WebHook struct {
 
 type WebHookConfig struct {
 	Port                 int    `yaml:"port"`
+	CertFile             string `yaml:"certFile"`
+	KeyFile              string `yaml:"keyFile"`
 	QueueCapacity        int    `yaml:"queueCapacity"`
 	ZabbixServerHost     string `yaml:"zabbixServerHost"`
 	ZabbixServerPort     int    `yaml:"zabbixServerPort"`
@@ -70,6 +72,8 @@ func ConfigFromFile(filename string) (cfg *WebHookConfig, err error) {
 	// Default values
 	config := WebHookConfig{
 		Port:                 8080,
+		CertFile:             "",
+		KeyFile:              "",
 		QueueCapacity:        500,
 		ZabbixServerHost:     "127.0.0.1",
 		ZabbixServerPort:     10051,
@@ -93,9 +97,15 @@ func (hook *WebHook) Start() error {
 	go hook.processAlerts()
 
 	// Launch the listening thread
-	log.Println("Initializing HTTP server")
 	http.HandleFunc("/alerts", hook.alertsHandler)
-	err := http.ListenAndServe(":"+strconv.Itoa(hook.config.Port), nil)
+	var err error
+	if hook.config.CertFile == "" || hook.config.KeyFile == "" {
+		log.Println("Initializing HTTP server")
+		err = http.ListenAndServe(":"+strconv.Itoa(hook.config.Port), nil)
+	} else {
+		log.Println("Initializing HTTPS server")
+		err = http.ListenAndServeTLS(":"+strconv.Itoa(hook.config.Port), hook.config.CertFile, hook.config.KeyFile, nil)
+	}
 	if err != nil {
 		return fmt.Errorf("can't start the listening thread: %s", err)
 	}
