@@ -8,8 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	//"reflect"
 
-	zabbix "github.com/blacked/go-zabbix"
+	zabbix "github.com/adubkov/go-zabbix"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
@@ -22,15 +23,33 @@ type WebHook struct {
 }
 
 type WebHookConfig struct {
-	Port                 int    `yaml:"port"`
-	CertFile             string `yaml:"certFile"`
-	KeyFile              string `yaml:"keyFile"`
-	QueueCapacity        int    `yaml:"queueCapacity"`
-	ZabbixServerHost     string `yaml:"zabbixServerHost"`
-	ZabbixServerPort     int    `yaml:"zabbixServerPort"`
-	ZabbixHostDefault    string `yaml:"zabbixHostDefault"`
-	ZabbixHostAnnotation string `yaml:"zabbixHostAnnotation"`
-	ZabbixKeyPrefix      string `yaml:"zabbixKeyPrefix"`
+	Port                 int           `yaml:"port"`
+	SecurePort           int           `yaml:"securePort"`
+	CertFile             string        `yaml:"certFile"`
+	KeyFile              string        `yaml:"keyFile"`
+	QueueCapacity        int           `yaml:"queueCapacity"`
+	RxLog		     int           `yaml:"rxLog"`
+	ZabbixServerHost     string        `yaml:"zabbixServerHost"`
+	ZabbixServerPort     int           `yaml:"zabbixServerPort"`
+	ZabbixHostAnnotation string        `yaml:"zabbixHostAnnotation"`
+	ZabbixHostDefault    string        `yaml:"zabbixHostDefault"`
+	ZabbixHostLabel      string        `yaml:"zabbixHostLabel"`
+	ZabbixKeyDefault     string        `yaml:"zabbixKeyDefault"`
+	ZabbixKeyLabel       string        `yaml:"zabbixKeyLabel"`
+	ZabbixKeyPrefix      string        `yaml:"zabbixKeyPrefix"`
+	ZabbixHostModifier   []ModifierMap `yaml:"zabbixHostModifier,omitempty"`
+}
+
+type ModifierMap struct {
+	Name    string     `yaml:"name,omitempty"`
+	Inspect string     `yaml:"inspect,omitempty"`
+	Map     []Modifier `yaml:"map"`
+}
+
+type Modifier struct {
+	Match  string `yaml:match"`
+	Prefix string `yaml:prefix,omitempty"`
+	Suffix string `yaml:suffix,omitempty"`
 }
 
 type HookRequest struct {
@@ -72,14 +91,19 @@ func ConfigFromFile(filename string) (cfg *WebHookConfig, err error) {
 	// Default values
 	config := WebHookConfig{
 		Port:                 8080,
+		SecurePort:           10443,
 		CertFile:             "",
 		KeyFile:              "",
 		QueueCapacity:        500,
+		RxLog:		      0,
 		ZabbixServerHost:     "127.0.0.1",
 		ZabbixServerPort:     10051,
 		ZabbixHostAnnotation: "zabbix_host",
-		ZabbixKeyPrefix:      "prometheus",
 		ZabbixHostDefault:    "",
+		ZabbixHostLabel:      "zabbix_host",
+		ZabbixKeyDefault:     "",
+		ZabbixKeyLabel:       "",
+		ZabbixKeyPrefix:      "prometheus",
 	}
 
 	err = yaml.Unmarshal(configFile, &config)
@@ -95,6 +119,35 @@ func (hook *WebHook) Start() error {
 
 	// Launch the process thread
 	go hook.processAlerts()
+
+	//log.Infof("hook.config.ZabbixHostModifier type: %T", hook.config.ZabbixHostModifier)
+	if typeof(hook.config.ZabbixHostModifier) == "[]webhook.ModifierMap" {
+		for _, zhm := range hook.config.ZabbixHostModifier {
+			var zhmi = zhm.Inspect
+			if 0 == len(zhmi) { zhmi = "generatorURL" }
+			var zhmn = zhm.Name
+			if 0 == len(zhmn) { zhmn = zhmi }
+			log.Infof(" [%s] inspect: %s", zhmn, zhmi)
+			var zhmm = zhm.Map
+			//log.Infof(" zhm.Map type: %T", zhmm)
+			if typeof(zhmm) == "[]webhook.Modifier" {
+				//log.Infof(" zhm.Map: %s", zhmm)
+				h := "server01"
+				h1 := ""
+				for _, m := range zhmm {
+					// log.Infof("  Match: %s, Prefix: %s, Suffix: %s", m.Match, m.Prefix, m.Suffix)
+					if len(m.Suffix) != 0 {
+						h1 = h + m.Suffix
+					} else if m.Prefix != "" {
+						h1 = m.Prefix + h
+					} else {
+						h1 = h
+					}
+					log.Infof(" %s contains(%s) ? %s -> %s", zhmi, m.Match, h, h1)
+				}
+			}
+		}
+	}
 
 	// Launch the listening thread
 	http.HandleFunc("/alerts", hook.alertsHandler)
@@ -137,10 +190,16 @@ func (hook *WebHook) postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if hook.config.RxLog != 0 {
+		body, err := json.Marshal(m)
+		if err == nil {
+			log.Infof("%s sent: '%s'", r.RemoteAddr, body)
+		}
+	}
+
 	for index := range m.Alerts {
 		hook.channel <- &m.Alerts[index]
 	}
-
 }
 
 func (hook *WebHook) processAlerts() {
@@ -159,19 +218,53 @@ func (hook *WebHook) processAlerts() {
 
 			host, exists := a.Annotations[hook.config.ZabbixHostAnnotation]
 			if !exists {
+				host, exists = a.Labels[hook.config.ZabbixHostLabel]
+			}
+			if !exists {
 				host = hook.config.ZabbixHostDefault
+			}
+
+			itemkey, exists := a.Labels[hook.config.ZabbixKeyLabel]
+			if !exists {
+				itemkey = hook.config.ZabbixKeyDefault
+				exists = itemkey != ""
 			}
 
 			// Send alerts only if a host annotation is present or configuration for default host is not empty
 			if host != "" {
-				key := fmt.Sprintf("%s.%s", hook.config.ZabbixKeyPrefix, strings.ToLower(a.Labels["alertname"]))
-				value := "0"
-				if a.Status == "firing" {
-					value = "1"
-				}
+				if !exists {
+					log.Errorf("*** message from host %q dropped; key not found or no default key set", host)
+				} else {
 
-				log.Infof("added Zabbix metrics, host: '%s' key: '%s', value: '%s'", host, key, value)
-				metrics = append(metrics, zabbix.NewMetric(host, key, value))
+					// with ZabbixHostModifierMap config: process needed substitutions
+					if 0 != len(hook.config.ZabbixHostModifier) {
+						h1 := hook.modifyHost(host,a)
+						//log.Infof("  out: host: %s, h1: %s",  host, h1)
+						if h1 != host {
+							log.Infof("  ZabbixHostModifier result: %s -> %s", host, h1)
+							host = h1
+						} else {
+							log.Infof("  host not altered ZabbixHostModifierMap: %s", host)
+						}
+					}
+
+					key := fmt.Sprintf("%s.%s", hook.config.ZabbixKeyPrefix, strings.ToLower(itemkey))
+					body, err := json.Marshal(a)
+					if err == nil {
+						// log.Infof("%s sent: '%s'", r.RemoteAddr, body)
+						log.Infof("added Zabbix metrics, host: '%s' key: '%s', text: '%s'", host, key, body)
+						metrics = append(metrics, zabbix.NewMetric(host, key, string(body[:])))
+					} else {
+						log.Errorf("*** host: '%s' key: '%s' json.Marshal failed: %v", host, key, err)
+					}
+
+					// value := "0"
+					// if a.Status == "firing" {
+					//	value = "1"
+					// }
+					// log.Infof("added Zabbix metrics, host: '%s' key: '%s', value: '%s'", host, key, value)
+					// metrics = append(metrics, zabbix.NewMetric(host, key, value))
+				}
 			}
 		default:
 			if len(metrics) != 0 {
@@ -198,4 +291,47 @@ func (hook *WebHook) zabbixSend(metrics []*zabbix.Metric) {
 		log.Info("successfully sent")
 	}
 
+}
+
+// modify hostnames, according to config in the zabbixHostModifier array
+func (hook *WebHook) modifyHost(h string, a *Alert) string {
+	//log.Infof(" modifyHost testing alert for host: %s", h)
+	h1 := h
+	for _, zhm := range hook.config.ZabbixHostModifier {
+		//log.Infof("  -in: zhm.name: %s, h: %s", zhm.Name, h)
+		// look for Alert field "f" referenced by zhm.Inspect, as Annotation, Label or direct - copy value to "v"
+		f := zhm.Inspect
+		v := ""
+		exists := false
+		if (0 == len(f)) || (f == "generatorURL") {
+			f = "generatorURL"
+			v = a.GeneratorURL
+		} else {
+			if v, exists = a.Annotations[f]; !exists {
+				v, exists = a.Labels[f]
+			}
+			if !exists {
+				continue // field to inspect absent on Alert: try next ModifierMap
+			}
+		}
+		//log.Infof("  inspecting '%s': %s", f, v)
+		// Relevant field 'f' found - loop over Match -> Prefix/Suffix rules
+		for _, m := range zhm.Map {
+			if strings.Contains(v, m.Match) {
+				if len(m.Suffix) != 0 {
+					h1 = h1 + m.Suffix
+				} else if m.Prefix != "" {
+					h1 = m.Prefix + h1
+				}
+				//log.Infof(" %s.contains(%s) ? %s -> %s", f, m.Match, h, h1)
+			}
+		}
+		//}
+	}
+	return h1
+}
+
+// return a variable's type
+func typeof(v interface{}) string {
+    return fmt.Sprintf("%T", v)
 }

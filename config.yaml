@@ -3,16 +3,46 @@ port: 8080
 # Certificate (with intermediates) and keypair files
 #certFile: cert-with-chain.pem
 #keyFile: key.pem
+
 # Number of alerts the webhook queue can contains while waiting for processing
 queueCapacity: 500
+# Logging of inbound messages (no=0, yes>0)
+rxLog: 1
 
 # Hostname of your zabbix server
-zabbixServerHost: zabbix-server-here
+#zabbixServerHost: zabbix-server-here
+zabbixServerHost: '[::1]'
 # Trapper port of your zabbix server
 zabbixServerPort: 10051
-# Look in this annotation for a zabbix host to send alerts to, if not present and no zabbixHostDefault is defined then alert will be ignored
+
+# The alert annotation(1), label(2) or zabbixHostDefault(3) should yield the receiving zabbix_host, or alerts get ignored.
 zabbixHostAnnotation: zabbix_host
+zabbixHostLabel: team
 # Default host to send alerts to
 zabbixHostDefault: ""
+
+# Generate host suffixes from Prometheus' generatorURL using this array of ModifierMaps.
+# Each hostmodifier element has an optional "inspect:" controlling the relevant Annotation or Label to examine.
+# Maps consist of (case-sensitive substring) "match:" attributes, with desired Suffix and/or Prefix statements.
+# Order matters, names are cosmetic and may be of help in debugging. ALL matches are performed sequentially.
+#zabbixHostModifier:
+#- name: An optional name
+#  inspect: some-important-Annotation-or-Label
+#  map:
+#  - match: the Magic Word
+#    prefix: 'magic-'
+zabbixHostModifier:
+- name: default
+  map:
+  - match: staging
+    suffix: '-staging'
+  - match: dev
+    suffix: '-dev'
+
+# Look in this label for a zabbix item key to send alerts to, if not present and no zabbixKeyDefault is defined then alert will be ignored
+zabbixKeyLabel: alertname
+# Default host to send alerts to
+zabbixKeyDefault: alert
+
 # Items key prefix, keys will be zabbixKeyPrefix.alertname
 zabbixKeyPrefix: prometheus
