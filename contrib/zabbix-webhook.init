@@ -1,0 +1,112 @@
+#!/bin/sh
+#
+# chkconfig: - 87 13
+# description: Zabbix webhook
+# processname: zabbix_webhook
+# config: /etc/zabbix/zabbix_webhook.yaml
+#
+
+### BEGIN INIT INFO
+# Provides: zabbix-webhook
+# Required-Start: $local_fs $network
+# Required-Stop: $local_fs $network
+# Should-Start: zabbix
+# Should-Stop: zabbix
+# Default-Start:
+# Default-Stop: 0 1 2 3 4 5 6
+# Short-Description: Start and stop Zabbix Webhook service by Gael Mauleon
+# Description: Zabbix webhook service by https://github.com/gmauleon/alertmanager-zabbix-webhook, WITH SSL
+### END INIT INFO
+
+# This manages the GO webhook for zabbix by Gael Mauleon: https://github.com/gmauleon/alertmanager-zabbix-webhook
+# and go-daemon package from Alexandre Fiori: https://github.com/fiorix/go-daemon
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+if [ -x /usr/local/sbin/zabbix_webhook ]; then
+    exec=/usr/local/sbin/zabbix_webhook
+else
+    exit 5
+fi
+
+prog=${exec##*/}
+conf=/etc/zabbix/zabbix_webhook.yaml
+pidfile=/var/run/zabbix/${prog}.pid
+logfile=/var/log/zabbix/${prog}.log
+rundir=/var/run/zabbix/
+timeout=10
+
+if [ -f /etc/sysconfig/zabbix-webhook ]; then
+    . /etc/sysconfig/zabbix-webhook
+fi
+
+user_conf="--user ${ZABBIX_WEBHOOK_USER:-zabbix}"
+group_conf="--group ${ZABBIX_WEBHOOK_GROUP:-zabbix}"
+
+lockfile=/var/lock/subsys/zabbix-webhook
+
+check() {
+    [ `id -u` = 0 ] || exit 4
+    test -x $exec || exit 5
+}
+
+start()
+{
+    check
+    if [ ! -f $lockfile ]; then
+        echo -n $"Starting Zabbix webhook: "
+	daemon god --nohup --logfile $logfile --pidfile $pidfile $user_conf $group_conf --rundir $rundir -- $exec -config $conf
+        rv=$?
+        echo
+        [ $rv -eq 0 ] && touch $lockfile
+        return $rv
+    fi
+}
+
+stop()
+{
+    check
+    echo -n $"Stopping $prog: "
+    killproc -p $pidfile -d $timeout $prog
+    rv=$?
+    if [ $rv -eq 0 ]; then
+        rm -f $lockfile $pidfile
+        success; echo
+    else
+        failure; echo
+    fi
+    return $rv
+}
+
+restart()
+{
+    stop
+    start
+}
+
+case "$1" in
+    start|stop|restart)
+        $1
+        ;;
+    force-reload)
+        restart
+        ;;
+    status)
+        status -p $pidfile $prog 
+        ;;
+    try-restart|condrestart)
+        if status $prog >/dev/null ; then
+            restart
+        fi
+        ;;
+    reload)
+        action $"Service ${0##*/} does not support the reload action: " /bin/false
+        exit 3
+        ;;
+    *)
+	echo $"Usage: $0 {start|stop|status|restart|try-restart|force-reload}"
+	exit 2
+	;;
+esac
+
