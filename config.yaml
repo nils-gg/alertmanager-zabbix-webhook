@@ -1,5 +1,6 @@
 # Webhook listening port
 port: 8080
+
 # Certificate (with intermediates) and keypair files
 #certFile: cert-with-chain.pem
 #keyFile: key.pem
@@ -9,8 +10,7 @@ queueCapacity: 500
 # Logging of inbound messages (no=0, yes>0)
 rxLog: 1
 
-# Hostname of your zabbix server
-#zabbixServerHost: zabbix-server-here
+# Hostname of your zabbix server - i.e. localhost, 127.0.0.1 or [::1], if setup is on your zabbix server
 zabbixServerHost: '[::1]'
 # Trapper port of your zabbix server
 zabbixServerPort: 10051
