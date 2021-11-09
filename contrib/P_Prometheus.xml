@@ -1,0 +1,1223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>4.4</version>
+    <date>2021-10-29T11:50:27Z</date>
+    <groups>
+        <group>
+            <name>Templates</name>
+        </group>
+    </groups>
+    <templates>
+        <template>
+            <template>P_Prometheus</template>
+            <name>P_Prometheus</name>
+            <description>Prometheus alert receiver using zabbix_webhook receiver.</description>
+            <groups>
+                <group>
+                    <name>Templates</name>
+                </group>
+            </groups>
+            <applications>
+                <application>
+                    <name>Prometheus</name>
+                </application>
+            </applications>
+            <items>
+                <item>
+                    <name>alerts received in last hour</name>
+                    <type>CALCULATED</type>
+                    <key>alerts</key>
+                    <delay>5m</delay>
+                    <history>180d</history>
+                    <params>count(prometheus.alert,1h)</params>
+                    <description>counts the number of alerts received by the Prometheus webhook in the last hour. The full alert messages should be retired much sooner than the integer value.</description>
+                    <applications>
+                        <application>
+                            <name>Prometheus</name>
+                        </application>
+                    </applications>
+                    <triggers>
+                        <trigger>
+                            <expression>{max({$MAXSILENCE})}=0</expression>
+                            <name>zero alerts received in {$MAXSILENCE}</name>
+                            <priority>WARNING</priority>
+                            <description>No alert has been received for over {$MAXSILENCE}. Maybe verify Prometheus AlertManager configs?</description>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>containerAlert</name>
+                    <type>DEPENDENT</type>
+                    <key>containerAlert</key>
+                    <delay>0</delay>
+                    <trends>0</trends>
+                    <value_type>TEXT</value_type>
+                    <description>alerts, where $.labels.container =~ .</description>
+                    <applications>
+                        <application>
+                            <name>Prometheus</name>
+                        </application>
+                    </applications>
+                    <preprocessing>
+                        <step>
+                            <type>MATCHES_REGEX</type>
+                            <params>&quot;container&quot;:&quot;[^&quot;]+&quot;</params>
+                            <error_handler>DISCARD_VALUE</error_handler>
+                        </step>
+                    </preprocessing>
+                    <master_item>
+                        <key>prometheus.alert</key>
+                    </master_item>
+                </item>
+                <item>
+                    <name>istioAlert</name>
+                    <type>DEPENDENT</type>
+                    <key>istioAlert</key>
+                    <delay>0</delay>
+                    <trends>0</trends>
+                    <value_type>TEXT</value_type>
+                    <description>Istio alerts, where $.labels.destination_service=~ .</description>
+                    <applications>
+                        <application>
+                            <name>Prometheus</name>
+                        </application>
+                    </applications>
+                    <preprocessing>
+                        <step>
+                            <type>MATCHES_REGEX</type>
+                            <params>&quot;destination_service&quot;:&quot;[^&quot;]+&quot;</params>
+                            <error_handler>DISCARD_VALUE</error_handler>
+                        </step>
+                    </preprocessing>
+                    <master_item>
+                        <key>prometheus.alert</key>
+                    </master_item>
+                </item>
+                <item>
+                    <name>alert</name>
+                    <type>TRAP</type>
+                    <key>prometheus.alert</key>
+                    <delay>0</delay>
+                    <trends>0</trends>
+                    <value_type>TEXT</value_type>
+                    <description>full prometheus alert message, to be further processed using dependent items.</description>
+                    <applications>
+                        <application>
+                            <name>Prometheus</name>
+                        </application>
+                    </applications>
+                </item>
+                <item>
+                    <name>resourceAlert</name>
+                    <type>DEPENDENT</type>
+                    <key>resourceAlert</key>
+                    <delay>0</delay>
+                    <trends>0</trends>
+                    <value_type>TEXT</value_type>
+                    <description>alerts, where $.labels.resource=~ .</description>
+                    <applications>
+                        <application>
+                            <name>Prometheus</name>
+                        </application>
+                    </applications>
+                    <preprocessing>
+                        <step>
+                            <type>MATCHES_REGEX</type>
+                            <params>&quot;resource&quot;:&quot;[^&quot;]+&quot;</params>
+                            <error_handler>DISCARD_VALUE</error_handler>
+                        </step>
+                    </preprocessing>
+                    <master_item>
+                        <key>prometheus.alert</key>
+                    </master_item>
+                </item>
+            </items>
+            <discovery_rules>
+                <discovery_rule>
+                    <name>container.discovery</name>
+                    <type>DEPENDENT</type>
+                    <key>container.discovery</key>
+                    <delay>0</delay>
+                    <filter>
+                        <conditions>
+                            <condition>
+                                <macro>{#CONTAINER}</macro>
+                                <value>.+</value>
+                                <formulaid>A</formulaid>
+                            </condition>
+                        </conditions>
+                    </filter>
+                    <lifetime>1461d</lifetime>
+                    <description>Auto-discovery of Prometheus' alerts, items and triggers on containers, as received from Prometheus via Gael Mauleon's webhook (https://github.com/gmauleon/alertmanager-zabbix-webhook)</description>
+                    <item_prototypes>
+                        <item_prototype>
+                            <name>{#ALERTNAME} {#CONTAINER} container</name>
+                            <type>DEPENDENT</type>
+                            <key>container[{#ALERTNAME},{#CONTAINER}]</key>
+                            <delay>0</delay>
+                            <trends>0</trends>
+                            <value_type>CHAR</value_type>
+                            <applications>
+                                <application>
+                                    <name>Prometheus</name>
+                                </application>
+                            </applications>
+                            <preprocessing>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;alertname&quot;:&quot;{#ALERTNAME}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;container&quot;:&quot;{#CONTAINER}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.labels.container</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>prometheus.alert</key>
+                            </master_item>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#ALERTNAME} {#CONTAINER} description</name>
+                            <type>DEPENDENT</type>
+                            <key>description[{#ALERTNAME},{#CONTAINER}]</key>
+                            <delay>0</delay>
+                            <trends>0</trends>
+                            <value_type>CHAR</value_type>
+                            <applications>
+                                <application>
+                                    <name>Prometheus</name>
+                                </application>
+                            </applications>
+                            <preprocessing>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;alertname&quot;:&quot;{#ALERTNAME}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;container&quot;:&quot;{#CONTAINER}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.annotations.description</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>prometheus.alert</key>
+                            </master_item>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#ALERTNAME} {#CONTAINER} severity</name>
+                            <type>DEPENDENT</type>
+                            <key>severity[{#ALERTNAME},{#CONTAINER}]</key>
+                            <delay>0</delay>
+                            <description>severity level of {#ALERTNAME} for {#CONTAINER}</description>
+                            <applications>
+                                <application>
+                                    <name>Prometheus</name>
+                                </application>
+                            </applications>
+                            <valuemap>
+                                <name>Prometheus alert severity levels</name>
+                            </valuemap>
+                            <preprocessing>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;alertname&quot;:&quot;{#ALERTNAME}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;container&quot;:&quot;{#CONTAINER}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.labels.severity</params>
+                                </step>
+                                <step>
+                                    <type>JAVASCRIPT</type>
+                                    <params>switch (value) {
+  case &quot;debug&quot;:   return 7
+  case &quot;info&quot;:    return 6
+  case &quot;notice&quot;:  return 5
+  case &quot;warning&quot;: return 4
+  case &quot;error&quot;:   return 3
+  case &quot;critical&quot;:return 2
+  case &quot;alert&quot;:   return 1
+  case &quot;emerg&quot;:   return 0
+  default: return -1
+}
+// as taken from syslog.h:
+//       #define KERN_EMERG    &quot;&lt;0&gt;&quot;  /* system is unusable               */
+//       #define KERN_ALERT    &quot;&lt;1&gt;&quot;  /* action must be taken immediately */
+//       #define KERN_CRIT     &quot;&lt;2&gt;&quot;  /* critical conditions              */
+//       #define KERN_ERR      &quot;&lt;3&gt;&quot;  /* error conditions                 */
+//       #define KERN_WARNING  &quot;&lt;4&gt;&quot;  /* warning conditions               */
+//       #define KERN_NOTICE   &quot;&lt;5&gt;&quot;  /* normal but significant condition */
+//       #define KERN_INFO     &quot;&lt;6&gt;&quot;  /* informational                    */
+//       #define KERN_DEBUG    &quot;&lt;7&gt;&quot;  /* debug-level messages             */
+</params>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>prometheus.alert</key>
+                            </master_item>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#ALERTNAME} {#CONTAINER} status</name>
+                            <type>DEPENDENT</type>
+                            <key>status[{#ALERTNAME},{#CONTAINER}]</key>
+                            <delay>0</delay>
+                            <applications>
+                                <application>
+                                    <name>Prometheus</name>
+                                </application>
+                            </applications>
+                            <valuemap>
+                                <name>Prometheus alert status</name>
+                            </valuemap>
+                            <preprocessing>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;alertname&quot;:&quot;{#ALERTNAME}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;container&quot;:&quot;{#CONTAINER}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.status</params>
+                                </step>
+                                <step>
+                                    <type>JAVASCRIPT</type>
+                                    <params>switch (value) {
+  case &quot;resolved&quot;: return 0; break
+  case &quot;firing&quot;: return 1; break
+  case &quot;pending&quot;: return 2; break
+  default: return -1
+}</params>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>prometheus.alert</key>
+                            </master_item>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#ALERTNAME} summary</name>
+                            <type>DEPENDENT</type>
+                            <key>summary[{#ALERTNAME}]</key>
+                            <delay>0</delay>
+                            <trends>0</trends>
+                            <value_type>CHAR</value_type>
+                            <description>{#ALERTNAME}: {#SUMMARY}</description>
+                            <applications>
+                                <application>
+                                    <name>Prometheus</name>
+                                </application>
+                            </applications>
+                            <preprocessing>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;alertname&quot;:&quot;{#ALERTNAME}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.annotations.summary</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>prometheus.alert</key>
+                            </master_item>
+                        </item_prototype>
+                    </item_prototypes>
+                    <trigger_prototypes>
+                        <trigger_prototype>
+                            <expression>{P_Prometheus:status[{#ALERTNAME},{#CONTAINER}].last()}=1 and {P_Prometheus:severity[{#ALERTNAME},{#CONTAINER}].last()}=2 and {P_Prometheus:container[{#ALERTNAME},{#CONTAINER}].iregexp({$ACC_RE})}=0</expression>
+                            <name>critical: {#ALERTNAME}: {#CONTAINER}</name>
+                            <priority>HIGH</priority>
+                            <description>{#SUMMARY}</description>
+                        </trigger_prototype>
+                        <trigger_prototype>
+                            <expression>{P_Prometheus:status[{#ALERTNAME},{#CONTAINER}].last()}=1 and {P_Prometheus:severity[{#ALERTNAME},{#CONTAINER}].last()}=3</expression>
+                            <name>error: {#ALERTNAME}: {#CONTAINER}</name>
+                            <priority>AVERAGE</priority>
+                            <description>{#SUMMARY}</description>
+                        </trigger_prototype>
+                        <trigger_prototype>
+                            <expression>{P_Prometheus:status[{#ALERTNAME},{#CONTAINER}].last()}=1 and {P_Prometheus:severity[{#ALERTNAME},{#CONTAINER}].last()}=6</expression>
+                            <name>info: {#ALERTNAME}: {#CONTAINER}</name>
+                            <priority>INFO</priority>
+                            <description>{#SUMMARY}</description>
+                        </trigger_prototype>
+                        <trigger_prototype>
+                            <expression>{P_Prometheus:status[{#ALERTNAME},{#CONTAINER}].last()}=1 and {P_Prometheus:severity[{#ALERTNAME},{#CONTAINER}].last()}=4</expression>
+                            <name>warning: {#ALERTNAME}: {#CONTAINER}</name>
+                            <priority>WARNING</priority>
+                            <description>{#SUMMARY}</description>
+                        </trigger_prototype>
+                    </trigger_prototypes>
+                    <master_item>
+                        <key>containerAlert</key>
+                    </master_item>
+                    <lld_macro_paths>
+                        <lld_macro_path>
+                            <lld_macro>{#ALERTNAME}</lld_macro>
+                            <path>$.labels.alertname</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#CONTAINER}</lld_macro>
+                            <path>$.labels.container</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#DESCRIPTION}</lld_macro>
+                            <path>$.annotations.description</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#ENDPOINT}</lld_macro>
+                            <path>$.labels.endpoint</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#GENERATORURL}</lld_macro>
+                            <path>$.generatorURL</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#GRAFANA}</lld_macro>
+                            <path>$.annotations.grafana</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#INSTANCE}</lld_macro>
+                            <path>$.labels.instance</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#JOB}</lld_macro>
+                            <path>$.labels.job</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#NAMESPACE}</lld_macro>
+                            <path>$.labels.namespace</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#POD}</lld_macro>
+                            <path>$.labels.pod</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#REASON}</lld_macro>
+                            <path>$.labels.reason</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#SERVICE}</lld_macro>
+                            <path>$.labels.service</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#SEVERITY}</lld_macro>
+                            <path>$.labels.severity</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#STATUS}</lld_macro>
+                            <path>$.status</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#SUMMARY}</lld_macro>
+                            <path>$.annotations.summary</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#TEAM}</lld_macro>
+                            <path>$.labels.team</path>
+                        </lld_macro_path>
+                    </lld_macro_paths>
+                    <preprocessing>
+                        <step>
+                            <type>REGEX</type>
+                            <params>(.+)
+[\1]</params>
+                        </step>
+                    </preprocessing>
+                </discovery_rule>
+                <discovery_rule>
+                    <name>istioService.discovery</name>
+                    <type>DEPENDENT</type>
+                    <key>istioService.discovery</key>
+                    <delay>0</delay>
+                    <filter>
+                        <evaltype>AND</evaltype>
+                        <conditions>
+                            <condition>
+                                <macro>{#SERVICE}</macro>
+                                <value>.+</value>
+                                <formulaid>B</formulaid>
+                            </condition>
+                            <condition>
+                                <macro>{#DESTINATION_SERVICE}</macro>
+                                <value>.+</value>
+                                <formulaid>A</formulaid>
+                            </condition>
+                        </conditions>
+                    </filter>
+                    <lifetime>1461d</lifetime>
+                    <description>Auto-discovery of Istio Ingress Gateway services and alerts, as received from Prometheus via Gael Mauleon's webhook (https://github.com/gmauleon/alertmanager-zabbix-webhook)</description>
+                    <item_prototypes>
+                        <item_prototype>
+                            <name>{#ALERTNAME} {#NAMESPACE} {#SERVICE} {#DESTINATION_SERVICE} description</name>
+                            <type>DEPENDENT</type>
+                            <key>description[{#ALERTNAME},{#NAMESPACE},{#SERVICE},{#DESTINATION_SERVICE}]</key>
+                            <delay>0</delay>
+                            <trends>0</trends>
+                            <value_type>CHAR</value_type>
+                            <applications>
+                                <application>
+                                    <name>Prometheus</name>
+                                </application>
+                            </applications>
+                            <preprocessing>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;alertname&quot;:&quot;{#ALERTNAME}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;namespace&quot;:&quot;{#NAMESPACE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;service&quot;:&quot;{#SERVICE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;destination_service&quot;:&quot;{#DESTINATION_SERVICE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.annotations.description</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>prometheus.alert</key>
+                            </master_item>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#ALERTNAME} {#NAMESPACE} {#SERVICE} {#DESTINATION_SERVICE} severity</name>
+                            <type>DEPENDENT</type>
+                            <key>severity[{#ALERTNAME},{#NAMESPACE},{#SERVICE},{#DESTINATION_SERVICE}]</key>
+                            <delay>0</delay>
+                            <description>severity level of {#ALERTNAME} for {#NAMESPACE} {#SERVICE} -&gt; {#DESTINATION_SERVICE}</description>
+                            <applications>
+                                <application>
+                                    <name>Prometheus</name>
+                                </application>
+                            </applications>
+                            <valuemap>
+                                <name>Prometheus alert severity levels</name>
+                            </valuemap>
+                            <preprocessing>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;alertname&quot;:&quot;{#ALERTNAME}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;namespace&quot;:&quot;{#NAMESPACE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;service&quot;:&quot;{#SERVICE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;destination_service&quot;:&quot;{#DESTINATION_SERVICE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.labels.severity</params>
+                                </step>
+                                <step>
+                                    <type>JAVASCRIPT</type>
+                                    <params>switch (value) {
+  case &quot;debug&quot;:   return 7
+  case &quot;info&quot;:    return 6
+  case &quot;notice&quot;:  return 5
+  case &quot;warning&quot;: return 4
+  case &quot;error&quot;:   return 3
+  case &quot;critical&quot;:return 2
+  case &quot;alert&quot;:   return 1
+  case &quot;emerg&quot;:   return 0
+  default: return -1
+}
+// as taken from syslog.h:
+//       #define KERN_EMERG    &quot;&lt;0&gt;&quot;  /* system is unusable               */
+//       #define KERN_ALERT    &quot;&lt;1&gt;&quot;  /* action must be taken immediately */
+//       #define KERN_CRIT     &quot;&lt;2&gt;&quot;  /* critical conditions              */
+//       #define KERN_ERR      &quot;&lt;3&gt;&quot;  /* error conditions                 */
+//       #define KERN_WARNING  &quot;&lt;4&gt;&quot;  /* warning conditions               */
+//       #define KERN_NOTICE   &quot;&lt;5&gt;&quot;  /* normal but significant condition */
+//       #define KERN_INFO     &quot;&lt;6&gt;&quot;  /* informational                    */
+//       #define KERN_DEBUG    &quot;&lt;7&gt;&quot;  /* debug-level messages             */
+</params>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>prometheus.alert</key>
+                            </master_item>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#ALERTNAME} {#NAMESPACE} {#SERVICE} {#DESTINATION_SERVICE} status</name>
+                            <type>DEPENDENT</type>
+                            <key>status[{#ALERTNAME},{#NAMESPACE},{#SERVICE},{#DESTINATION_SERVICE}]</key>
+                            <delay>0</delay>
+                            <applications>
+                                <application>
+                                    <name>Prometheus</name>
+                                </application>
+                            </applications>
+                            <valuemap>
+                                <name>Prometheus alert status</name>
+                            </valuemap>
+                            <preprocessing>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;alertname&quot;:&quot;{#ALERTNAME}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;namespace&quot;:&quot;{#NAMESPACE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;service&quot;:&quot;{#SERVICE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;destination_service&quot;:&quot;{#DESTINATION_SERVICE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.status</params>
+                                </step>
+                                <step>
+                                    <type>JAVASCRIPT</type>
+                                    <params>switch (value) {
+  case &quot;resolved&quot;: return 0; break
+  case &quot;firing&quot;: return 1; break
+  case &quot;pending&quot;: return 2; break
+  default: return -1
+}</params>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>prometheus.alert</key>
+                            </master_item>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#ALERTNAME} {#NAMESPACE} {#SERVICE} {#DESTINATION_SERVICE} summary</name>
+                            <type>DEPENDENT</type>
+                            <key>summary[{#ALERTNAME},{#NAMESPACE},{#SERVICE},{#DESTINATION_SERVICE}]</key>
+                            <delay>0</delay>
+                            <trends>0</trends>
+                            <value_type>CHAR</value_type>
+                            <description>{#ALERTNAME}: {#SUMMARY}</description>
+                            <applications>
+                                <application>
+                                    <name>Prometheus</name>
+                                </application>
+                            </applications>
+                            <preprocessing>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;alertname&quot;:&quot;{#ALERTNAME}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;namespace&quot;:&quot;{#NAMESPACE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;service&quot;:&quot;{#SERVICE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;destination_service&quot;:&quot;{#DESTINATION_SERVICE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.annotations.summary</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>prometheus.alert</key>
+                            </master_item>
+                        </item_prototype>
+                    </item_prototypes>
+                    <trigger_prototypes>
+                        <trigger_prototype>
+                            <expression>{P_Prometheus:status[{#ALERTNAME},{#NAMESPACE},{#SERVICE},{#DESTINATION_SERVICE}].last()}=1 and {P_Prometheus:severity[{#ALERTNAME},{#NAMESPACE},{#SERVICE},{#DESTINATION_SERVICE}].last()}=2</expression>
+                            <name>critical: {#ALERTNAME} for {#NAMESPACE}: {#SERVICE} -&gt; {#DESTINATION_SERVICE}</name>
+                            <opdata>{#DESCRIPTION}</opdata>
+                            <url>{#LOGS}</url>
+                            <priority>AVERAGE</priority>
+                            <description>{#SUMMARY}&#13;
+(trigger severity limited to &quot;warning&quot;)</description>
+                            <tags>
+                                <tag>
+                                    <tag>destination_service</tag>
+                                    <value>{#DESTINATION_SERVICE}</value>
+                                </tag>
+                                <tag>
+                                    <tag>service</tag>
+                                    <value>{#SERVICE}</value>
+                                </tag>
+                                <tag>
+                                    <tag>subject</tag>
+                                    <value>service-destination_service</value>
+                                </tag>
+                            </tags>
+                        </trigger_prototype>
+                        <trigger_prototype>
+                            <expression>{P_Prometheus:status[{#ALERTNAME},{#NAMESPACE},{#SERVICE},{#DESTINATION_SERVICE}].last()}=1 and {P_Prometheus:severity[{#ALERTNAME},{#NAMESPACE},{#SERVICE},{#DESTINATION_SERVICE}].last()}=3</expression>
+                            <name>error: {#ALERTNAME} for {#NAMESPACE}: {#SERVICE} -&gt; {#DESTINATION_SERVICE}</name>
+                            <opdata>{#DESCRIPTION}</opdata>
+                            <priority>AVERAGE</priority>
+                            <description>{#SUMMARY}</description>
+                            <tags>
+                                <tag>
+                                    <tag>destination_service</tag>
+                                    <value>{#DESTINATION_SERVICE}</value>
+                                </tag>
+                                <tag>
+                                    <tag>service</tag>
+                                    <value>{#SERVICE}</value>
+                                </tag>
+                                <tag>
+                                    <tag>subject</tag>
+                                    <value>service-destination_service</value>
+                                </tag>
+                            </tags>
+                        </trigger_prototype>
+                        <trigger_prototype>
+                            <expression>{P_Prometheus:status[{#ALERTNAME},{#NAMESPACE},{#SERVICE},{#DESTINATION_SERVICE}].last()}=1 and {P_Prometheus:severity[{#ALERTNAME},{#NAMESPACE},{#SERVICE},{#DESTINATION_SERVICE}].last()}=6</expression>
+                            <name>info: {#ALERTNAME} for {#NAMESPACE}: {#SERVICE} -&gt; {#DESTINATION_SERVICE}</name>
+                            <opdata>{#DESCRIPTION}</opdata>
+                            <priority>INFO</priority>
+                            <description>{#SUMMARY}</description>
+                            <tags>
+                                <tag>
+                                    <tag>destination_service</tag>
+                                    <value>{#DESTINATION_SERVICE}</value>
+                                </tag>
+                                <tag>
+                                    <tag>service</tag>
+                                    <value>{#SERVICE}</value>
+                                </tag>
+                                <tag>
+                                    <tag>subject</tag>
+                                    <value>service-destination_service</value>
+                                </tag>
+                            </tags>
+                        </trigger_prototype>
+                        <trigger_prototype>
+                            <expression>{P_Prometheus:status[{#ALERTNAME},{#NAMESPACE},{#SERVICE},{#DESTINATION_SERVICE}].last()}=1 and {P_Prometheus:severity[{#ALERTNAME},{#NAMESPACE},{#SERVICE},{#DESTINATION_SERVICE}].last()}=4</expression>
+                            <name>warning: {#ALERTNAME} for {#NAMESPACE}: {#SERVICE} -&gt; {#DESTINATION_SERVICE}</name>
+                            <opdata>{#DESCRIPTION}</opdata>
+                            <priority>WARNING</priority>
+                            <description>{#SUMMARY}</description>
+                            <tags>
+                                <tag>
+                                    <tag>destination_service</tag>
+                                    <value>{#DESTINATION_SERVICE}</value>
+                                </tag>
+                                <tag>
+                                    <tag>service</tag>
+                                    <value>{#SERVICE}</value>
+                                </tag>
+                                <tag>
+                                    <tag>subject</tag>
+                                    <value>service-destination_service</value>
+                                </tag>
+                            </tags>
+                        </trigger_prototype>
+                    </trigger_prototypes>
+                    <master_item>
+                        <key>istioAlert</key>
+                    </master_item>
+                    <lld_macro_paths>
+                        <lld_macro_path>
+                            <lld_macro>{#ALERTNAME}</lld_macro>
+                            <path>$.labels.alertname</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#DESCRIPTION}</lld_macro>
+                            <path>$.annotations.description</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#GENERATORURL}</lld_macro>
+                            <path>$.generatorURL</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#GRAFANA}</lld_macro>
+                            <path>$.annotations.grafana</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#NAMESPACE}</lld_macro>
+                            <path>$.labels.namespace</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#DESTINATION_SERVICE}</lld_macro>
+                            <path>$.labels.destination_service</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#SEVERITY}</lld_macro>
+                            <path>$.labels.severity</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#STATUS}</lld_macro>
+                            <path>$.status</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#SUMMARY}</lld_macro>
+                            <path>$.annotations.summary</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#SERVICE}</lld_macro>
+                            <path>$.labels.service</path>
+                        </lld_macro_path>
+                    </lld_macro_paths>
+                    <preprocessing>
+                        <step>
+                            <type>REGEX</type>
+                            <params>(.+)
+[\1]</params>
+                        </step>
+                    </preprocessing>
+                </discovery_rule>
+                <discovery_rule>
+                    <name>resourcequota.discovery</name>
+                    <type>DEPENDENT</type>
+                    <key>resourcequota.discovery</key>
+                    <delay>0</delay>
+                    <filter>
+                        <evaltype>AND</evaltype>
+                        <conditions>
+                            <condition>
+                                <macro>{#RESOURCE}</macro>
+                                <value>.+</value>
+                                <formulaid>A</formulaid>
+                            </condition>
+                            <condition>
+                                <macro>{#RESOURCEQUOTA}</macro>
+                                <value>.+</value>
+                                <formulaid>B</formulaid>
+                            </condition>
+                        </conditions>
+                    </filter>
+                    <lifetime>1461d</lifetime>
+                    <description>Auto-discovery of Resourcequota' alerts types, items and triggers, as received from Prometheus via Gael Mauleon's webhook (https://github.com/gmauleon/alertmanager-zabbix-webhook)</description>
+                    <item_prototypes>
+                        <item_prototype>
+                            <name>{#ALERTNAME} {#NAMESPACE} {#RESOURCE} description</name>
+                            <type>DEPENDENT</type>
+                            <key>description[{#ALERTNAME},{#NAMESPACE},{#RESOURCE}]</key>
+                            <delay>0</delay>
+                            <trends>0</trends>
+                            <value_type>CHAR</value_type>
+                            <applications>
+                                <application>
+                                    <name>Prometheus</name>
+                                </application>
+                            </applications>
+                            <preprocessing>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;alertname&quot;:&quot;{#ALERTNAME}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;namespace&quot;:&quot;{#NAMESPACE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;resource&quot;:&quot;{#RESOURCE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.annotations.description</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>prometheus.alert</key>
+                            </master_item>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#ALERTNAME} {#NAMESPACE} {#RESOURCE} severity</name>
+                            <type>DEPENDENT</type>
+                            <key>severity[{#ALERTNAME},{#NAMESPACE},{#RESOURCE}]</key>
+                            <delay>0</delay>
+                            <description>severity level of {#ALERTNAME} for {#NAMESPACE} {#RESOURCE}</description>
+                            <applications>
+                                <application>
+                                    <name>Prometheus</name>
+                                </application>
+                            </applications>
+                            <valuemap>
+                                <name>Prometheus alert severity levels</name>
+                            </valuemap>
+                            <preprocessing>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;alertname&quot;:&quot;{#ALERTNAME}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;namespace&quot;:&quot;{#NAMESPACE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;resource&quot;:&quot;{#RESOURCE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.labels.severity</params>
+                                </step>
+                                <step>
+                                    <type>JAVASCRIPT</type>
+                                    <params>switch (value) {
+  case &quot;debug&quot;:   return 7
+  case &quot;info&quot;:    return 6
+  case &quot;notice&quot;:  return 5
+  case &quot;warning&quot;: return 4
+  case &quot;error&quot;:   return 3
+  case &quot;critical&quot;:return 2
+  case &quot;alert&quot;:   return 1
+  case &quot;emerg&quot;:   return 0
+  default: return -1
+}
+// as taken from syslog.h:
+//       #define KERN_EMERG    &quot;&lt;0&gt;&quot;  /* system is unusable               */
+//       #define KERN_ALERT    &quot;&lt;1&gt;&quot;  /* action must be taken immediately */
+//       #define KERN_CRIT     &quot;&lt;2&gt;&quot;  /* critical conditions              */
+//       #define KERN_ERR      &quot;&lt;3&gt;&quot;  /* error conditions                 */
+//       #define KERN_WARNING  &quot;&lt;4&gt;&quot;  /* warning conditions               */
+//       #define KERN_NOTICE   &quot;&lt;5&gt;&quot;  /* normal but significant condition */
+//       #define KERN_INFO     &quot;&lt;6&gt;&quot;  /* informational                    */
+//       #define KERN_DEBUG    &quot;&lt;7&gt;&quot;  /* debug-level messages             */
+</params>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>prometheus.alert</key>
+                            </master_item>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#ALERTNAME} {#NAMESPACE} {#RESOURCE} status</name>
+                            <type>DEPENDENT</type>
+                            <key>status[{#ALERTNAME},{#NAMESPACE},{#RESOURCE}]</key>
+                            <delay>0</delay>
+                            <applications>
+                                <application>
+                                    <name>Prometheus</name>
+                                </application>
+                            </applications>
+                            <valuemap>
+                                <name>Prometheus alert status</name>
+                            </valuemap>
+                            <preprocessing>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;alertname&quot;:&quot;{#ALERTNAME}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;namespace&quot;:&quot;{#NAMESPACE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;resource&quot;:&quot;{#RESOURCE}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.status</params>
+                                </step>
+                                <step>
+                                    <type>JAVASCRIPT</type>
+                                    <params>switch (value) {
+  case &quot;resolved&quot;: return 0; break
+  case &quot;firing&quot;: return 1; break
+  case &quot;pending&quot;: return 2; break
+  default: return -1
+}</params>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>prometheus.alert</key>
+                            </master_item>
+                        </item_prototype>
+                        <item_prototype>
+                            <name>{#ALERTNAME} for {#RESOURCE} summary</name>
+                            <type>DEPENDENT</type>
+                            <key>summary[{#ALERTNAME},{#RESOURCE}]</key>
+                            <delay>0</delay>
+                            <trends>0</trends>
+                            <value_type>CHAR</value_type>
+                            <description>{#ALERTNAME}: {#SUMMARY}</description>
+                            <applications>
+                                <application>
+                                    <name>Prometheus</name>
+                                </application>
+                            </applications>
+                            <preprocessing>
+                                <step>
+                                    <type>MATCHES_REGEX</type>
+                                    <params>&quot;alertname&quot;:&quot;{#ALERTNAME}&quot;</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                                <step>
+                                    <type>JSONPATH</type>
+                                    <params>$.annotations.summary</params>
+                                    <error_handler>DISCARD_VALUE</error_handler>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>prometheus.alert</key>
+                            </master_item>
+                        </item_prototype>
+                    </item_prototypes>
+                    <trigger_prototypes>
+                        <trigger_prototype>
+                            <expression>{P_Prometheus:status[{#ALERTNAME},{#NAMESPACE},{#RESOURCE}].last()}=1 and {P_Prometheus:severity[{#ALERTNAME},{#NAMESPACE},{#RESOURCE}].last()}=2</expression>
+                            <name>critical: {#ALERTNAME} for {#NAMESPACE}: {#RESOURCE}</name>
+                            <opdata>{#DESCRIPTION}</opdata>
+                            <priority>HIGH</priority>
+                            <description>{#SUMMARY}</description>
+                            <tags>
+                                <tag>
+                                    <tag>subject</tag>
+                                    <value>namespace</value>
+                                </tag>
+                            </tags>
+                        </trigger_prototype>
+                        <trigger_prototype>
+                            <expression>{P_Prometheus:status[{#ALERTNAME},{#NAMESPACE},{#RESOURCE}].last()}=1 and {P_Prometheus:severity[{#ALERTNAME},{#NAMESPACE},{#RESOURCE}].last()}=3</expression>
+                            <name>error: {#ALERTNAME} for {#NAMESPACE}: {#RESOURCE}</name>
+                            <opdata>{#DESCRIPTION}</opdata>
+                            <priority>AVERAGE</priority>
+                            <description>{#SUMMARY}</description>
+                            <tags>
+                                <tag>
+                                    <tag>subject</tag>
+                                    <value>namespace</value>
+                                </tag>
+                            </tags>
+                        </trigger_prototype>
+                        <trigger_prototype>
+                            <expression>{P_Prometheus:status[{#ALERTNAME},{#NAMESPACE},{#RESOURCE}].last()}=1 and {P_Prometheus:severity[{#ALERTNAME},{#NAMESPACE},{#RESOURCE}].last()}=6</expression>
+                            <name>info: {#ALERTNAME} for {#NAMESPACE}: {#RESOURCE}</name>
+                            <opdata>{#DESCRIPTION}</opdata>
+                            <priority>INFO</priority>
+                            <description>{#SUMMARY}</description>
+                            <tags>
+                                <tag>
+                                    <tag>subject</tag>
+                                    <value>namespace</value>
+                                </tag>
+                            </tags>
+                        </trigger_prototype>
+                        <trigger_prototype>
+                            <expression>{P_Prometheus:status[{#ALERTNAME},{#NAMESPACE},{#RESOURCE}].last()}=1 and {P_Prometheus:severity[{#ALERTNAME},{#NAMESPACE},{#RESOURCE}].last()}=4</expression>
+                            <name>warning: {#ALERTNAME} for {#NAMESPACE}: {#RESOURCE}</name>
+                            <opdata>{#DESCRIPTION}</opdata>
+                            <priority>WARNING</priority>
+                            <description>{#SUMMARY}</description>
+                            <tags>
+                                <tag>
+                                    <tag>subject</tag>
+                                    <value>namespace</value>
+                                </tag>
+                            </tags>
+                        </trigger_prototype>
+                    </trigger_prototypes>
+                    <master_item>
+                        <key>resourceAlert</key>
+                    </master_item>
+                    <lld_macro_paths>
+                        <lld_macro_path>
+                            <lld_macro>{#ALERTNAME}</lld_macro>
+                            <path>$.labels.alertname</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#DESCRIPTION}</lld_macro>
+                            <path>$.annotations.description</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#GENERATORURL}</lld_macro>
+                            <path>$.generatorURL</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#GRAFANA}</lld_macro>
+                            <path>$.annotations.grafana</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#NAMESPACE}</lld_macro>
+                            <path>$.labels.namespace</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#SEVERITY}</lld_macro>
+                            <path>$.labels.severity</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#STATUS}</lld_macro>
+                            <path>$.status</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#SUMMARY}</lld_macro>
+                            <path>$.annotations.summary</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#RESOURCE}</lld_macro>
+                            <path>$.labels.resource</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#RESOURCEQUOTA}</lld_macro>
+                            <path>$.labels.resourcequota</path>
+                        </lld_macro_path>
+                    </lld_macro_paths>
+                    <preprocessing>
+                        <step>
+                            <type>REGEX</type>
+                            <params>(.+)
+[\1]</params>
+                        </step>
+                    </preprocessing>
+                </discovery_rule>
+            </discovery_rules>
+            <macros>
+                <macro>
+                    <macro>{$ACC_RE}</macro>
+                    <value>acc|staging|test|dev</value>
+                    <description>regex for identifying Acceptance resources to suppress High-severity alerts</description>
+                </macro>
+                <macro>
+                    <macro>{$CRITICAL}</macro>
+                    <value>.*</value>
+                    <description>regex for alerts allowed to fire Critical triggers</description>
+                </macro>
+                <macro>
+                    <macro>{$ERROR}</macro>
+                    <value>.*</value>
+                    <description>regex for alerts allowed to fire Error triggers</description>
+                </macro>
+                <macro>
+                    <macro>{$INFO}</macro>
+                    <value>.*</value>
+                    <description>regex for alerts allowed to fire Informational triggers</description>
+                </macro>
+                <macro>
+                    <macro>{$MAXSILENCE}</macro>
+                    <value>1w</value>
+                    <description>maximum &quot;sane&quot; time between subsequent alerts</description>
+                </macro>
+                <macro>
+                    <macro>{$WARNING}</macro>
+                    <value>.*</value>
+                    <description>regex for alerts allowed to fire Warning triggers</description>
+                </macro>
+            </macros>
+        </template>
+    </templates>
+    <value_maps>
+        <value_map>
+            <name>Prometheus alert severity levels</name>
+            <mappings>
+                <mapping>
+                    <value>0</value>
+                    <newvalue>nil</newvalue>
+                </mapping>
+                <mapping>
+                    <value>1</value>
+                    <newvalue>alert</newvalue>
+                </mapping>
+                <mapping>
+                    <value>2</value>
+                    <newvalue>critical</newvalue>
+                </mapping>
+                <mapping>
+                    <value>3</value>
+                    <newvalue>error</newvalue>
+                </mapping>
+                <mapping>
+                    <value>4</value>
+                    <newvalue>warning</newvalue>
+                </mapping>
+                <mapping>
+                    <value>5</value>
+                    <newvalue>notice</newvalue>
+                </mapping>
+                <mapping>
+                    <value>6</value>
+                    <newvalue>info</newvalue>
+                </mapping>
+                <mapping>
+                    <value>7</value>
+                    <newvalue>debug</newvalue>
+                </mapping>
+            </mappings>
+        </value_map>
+        <value_map>
+            <name>Prometheus alert status</name>
+            <mappings>
+                <mapping>
+                    <value>0</value>
+                    <newvalue>resolved</newvalue>
+                </mapping>
+                <mapping>
+                    <value>1</value>
+                    <newvalue>firing</newvalue>
+                </mapping>
+                <mapping>
+                    <value>2</value>
+                    <newvalue>pending</newvalue>
+                </mapping>
+            </mappings>
+        </value_map>
+    </value_maps>
+</zabbix_export>
