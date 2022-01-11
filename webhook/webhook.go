@@ -1,6 +1,8 @@
 package webhook
 
 import (
+	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -28,7 +30,7 @@ type WebHookConfig struct {
 	CertFile             string        `yaml:"certFile"`
 	KeyFile              string        `yaml:"keyFile"`
 	QueueCapacity        int           `yaml:"queueCapacity"`
-	RxLog		     int           `yaml:"rxLog"`
+	RxLog                int           `yaml:"rxLog"`
 	ZabbixServerHost     string        `yaml:"zabbixServerHost"`
 	ZabbixServerPort     int           `yaml:"zabbixServerPort"`
 	ZabbixHostAnnotation string        `yaml:"zabbixHostAnnotation"`
@@ -95,7 +97,7 @@ func ConfigFromFile(filename string) (cfg *WebHookConfig, err error) {
 		CertFile:             "",
 		KeyFile:              "",
 		QueueCapacity:        500,
-		RxLog:		      0,
+		RxLog:                0,
 		ZabbixServerHost:     "127.0.0.1",
 		ZabbixServerPort:     10051,
 		ZabbixHostAnnotation: "zabbix_host",
@@ -124,9 +126,13 @@ func (hook *WebHook) Start() error {
 	if typeof(hook.config.ZabbixHostModifier) == "[]webhook.ModifierMap" {
 		for _, zhm := range hook.config.ZabbixHostModifier {
 			var zhmi = zhm.Inspect
-			if 0 == len(zhmi) { zhmi = "generatorURL" }
+			if 0 == len(zhmi) {
+				zhmi = "generatorURL"
+			}
 			var zhmn = zhm.Name
-			if 0 == len(zhmn) { zhmn = zhmi }
+			if 0 == len(zhmn) {
+				zhmn = zhmi
+			}
 			log.Infof(" [%s] inspect: %s", zhmn, zhmi)
 			var zhmm = zhm.Map
 			//log.Infof(" zhm.Map type: %T", zhmm)
@@ -150,14 +156,30 @@ func (hook *WebHook) Start() error {
 	}
 
 	// Launch the listening thread
-	http.HandleFunc("/alerts", hook.alertsHandler)
+	// http.HandleFunc("/alerts", hook.alertsHandler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/alerts", hook.alertsHandler)
 	var err error
 	if hook.config.CertFile == "" || hook.config.KeyFile == "" {
 		log.Println("Initializing HTTP server")
-		err = http.ListenAndServe(":"+strconv.Itoa(hook.config.Port), nil)
+		srv := &http.Server{
+			Addr:    ":" + strconv.Itoa(hook.config.Port),
+			Handler: mux,
+		}
+		err = srv.ListenAndServe()
+		// err = http.ListenAndServe(":"+strconv.Itoa(hook.config.Port), nil)
 	} else {
 		log.Println("Initializing HTTPS server")
-		err = http.ListenAndServeTLS(":"+strconv.Itoa(hook.config.Port), hook.config.CertFile, hook.config.KeyFile, nil)
+		srv := &http.Server{
+			Addr:    ":" + strconv.Itoa(hook.config.Port),
+			Handler: mux,
+			TLSConfig: &tls.Config{
+				MinVersion:               tls.VersionTLS12,
+				PreferServerCipherSuites: true,
+			},
+		}
+		err = srv.ListenAndServeTLS(hook.config.CertFile, hook.config.KeyFile)
+		// err = http.ListenAndServeTLS(":"+strconv.Itoa(hook.config.Port), hook.config.CertFile, hook.config.KeyFile, nil)
 	}
 	if err != nil {
 		return fmt.Errorf("can't start the listening thread: %s", err)
@@ -180,6 +202,15 @@ func (hook *WebHook) alertsHandler(w http.ResponseWriter, r *http.Request) {
 
 func (hook *WebHook) postHandler(w http.ResponseWriter, r *http.Request) {
 
+	rawbody, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Error reading body: %v", err)
+		http.Error(w, "can't read body", http.StatusBadRequest)
+		return
+	}
+	// set a new body, which will simulate the same data we read:
+	r.Body = ioutil.NopCloser(bytes.NewBuffer(rawbody))
+
 	dec := json.NewDecoder(r.Body)
 	defer r.Body.Close()
 
@@ -193,7 +224,7 @@ func (hook *WebHook) postHandler(w http.ResponseWriter, r *http.Request) {
 	if hook.config.RxLog != 0 {
 		body, err := json.Marshal(m)
 		if err == nil {
-			log.Infof("%s sent: '%s'", r.RemoteAddr, body)
+			log.Infof("%s sent: '%s' -> '%s'", r.RemoteAddr, rawbody, body)
 		}
 	}
 
@@ -238,7 +269,7 @@ func (hook *WebHook) processAlerts() {
 
 					// with ZabbixHostModifierMap config: process needed substitutions
 					if 0 != len(hook.config.ZabbixHostModifier) {
-						h1 := hook.modifyHost(host,a)
+						h1 := hook.modifyHost(host, a)
 						//log.Infof("  out: host: %s, h1: %s",  host, h1)
 						if h1 != host {
 							log.Infof("  ZabbixHostModifier result: %s -> %s", host, h1)
@@ -333,5 +364,5 @@ func (hook *WebHook) modifyHost(h string, a *Alert) string {
 
 // return a variable's type
 func typeof(v interface{}) string {
-    return fmt.Sprintf("%T", v)
+	return fmt.Sprintf("%T", v)
 }
