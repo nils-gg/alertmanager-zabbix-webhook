@@ -1,0 +1,29 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: INFO-Alertmanager-zabbix-webhook
+spec:
+  type: service
+  owner: user:guest
+  lifecycle: beta
+
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: info-alertmanager-zabbix-webhook
+  description: INFO-Alertmanager-zabbix-webhook - catch JSON POSTs from Prometheus Alertmanager and forward to Zabbix-agent as trapper items
+  labels:
+    info/language: golang
+  annotations:
+    info.nl/service-discovery: alertmanager-zabbix-webhook
+    github.com/project-slug: github.com/infonl/info-alertmanager-zabbix-webhook
+  tags:
+    - golang
+    - zabbix-server
+    - prometheus
+    - alertmanager
+spec:
+  type: webhook
+  lifecycle: production
+  owner: zabbix
+  system: monitoring
