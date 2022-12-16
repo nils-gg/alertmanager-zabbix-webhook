@@ -7,7 +7,7 @@ metadata:
     info/language: golang
   annotations:
     info.nl/service-discovery: alertmanager-zabbix-webhook
-    github.com/project-slug: github.com/infonl/info-alertmanager-zabbix-webhook
+    github.com/project-slug: infonl/info-alertmanager-zabbix-webhook
   tags:
     - golang
     - zabbix-server
