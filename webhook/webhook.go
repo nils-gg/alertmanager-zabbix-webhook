@@ -255,11 +255,11 @@ func (hook *WebHook) processAlerts() {
 				host = hook.config.ZabbixHostDefault
 			}
 
-			itemkey, exists := a.Labels[hook.config.ZabbixKeyLabel]
-			if !exists {
-				itemkey = hook.config.ZabbixKeyDefault
-				exists = itemkey != ""
-			}
+			// itemkey, exists := a.Labels[hook.config.ZabbixKeyLabel]
+			// if !exists {
+            itemkey := hook.config.ZabbixKeyDefault
+			// 	exists = itemkey != ""
+			// }
 
 			// Send alerts only if a host annotation is present or configuration for default host is not empty
 			if host != "" {
@@ -279,7 +279,8 @@ func (hook *WebHook) processAlerts() {
 						}
 					}
 
-					key := fmt.Sprintf("%s.%s", hook.config.ZabbixKeyPrefix, strings.ToLower(itemkey))
+					// key := fmt.Sprintf("%s.%s", hook.config.ZabbixKeyPrefix, strings.ToLower(itemkey))
+					key := strings.ToLower(itemkey)
 					body, err := json.Marshal(a)
 					if err == nil {
 						// log.Infof("%s sent: '%s'", r.RemoteAddr, body)

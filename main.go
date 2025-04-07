@@ -1,11 +1,12 @@
 package main
 
 import (
+	"alertmanager-zabbix-webhook/webhook"
 	"flag"
-	//	"github.com/gmauleon/alertmanager-zabbix-webhook/webhook"
-	"./webhook"
-	"github.com/sirupsen/logrus"
+	// "github.com/infonl/info-alertmanager-zabbix-webhook/webhook
 	"os"
+
+	"github.com/sirupsen/logrus"
 )
 
 var log = logrus.WithField("context", "main")
